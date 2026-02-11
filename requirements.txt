@@ -1,0 +1,15 @@
+# Threshold Function Enumeration - Dependencies
+# =============================================
+
+# Core dependencies (required for both notebooks)
+z3-solver>=4.12.0      # SMT solver for constraint satisfaction
+numpy>=1.21.0          # Numerical computing and vectorized operations
+scipy>=1.7.0           # Linear programming for chamber feasibility
+
+# GPU acceleration (required for threshold_functions_complete_gpu.ipynb)
+# Install PyTorch with CUDA support from: https://pytorch.org/get-started/locally/
+torch>=2.0.0           # GPU-accelerated orbit computation
+
+# Development dependencies (optional)
+# jupyter>=1.0.0       # For running the notebooks
+# matplotlib>=3.5.0    # For visualization
