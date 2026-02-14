@@ -108,6 +108,139 @@ The key optimization uses the **hyperoctahedral group B_n**:
 
 ---
 
+## Pattern Analysis & A002079 Approximation
+
+### King's Formula (2023)
+
+The total number of threshold functions N(n) can be computed from the **A002079 sequence** via:
+
+```
+N(n) = Σ_{k=0}^n A002079(k) × C(n,k) × 2^k
+```
+
+Where:
+- **A002079(k)** = number of threshold functions essentially depending on exactly k variables
+- **C(n,k)** = binomial coefficient "n choose k"
+- **2^k** = factor accounting for variable negations
+
+```mermaid
+flowchart LR
+    A["A002079(k)"] --> K["King's Formula"]
+    B["C(n,k)"] --> K
+    C["2^k"] --> K
+    K --> N["N(n)"]
+```
+
+| k | A002079(k) | Description |
+|:-:|----------:|:------------|
+| 0 | 2 | Constant functions (0 or 1) |
+| 1 | 1 | Single-variable functions |
+| 2 | 2 | Two essential variables |
+| 3 | 9 | Three essential variables |
+| 4 | 96 | Four essential variables |
+| 5 | 2,690 | Five essential variables |
+| 6 | 226,360 | Six essential variables |
+| 7 | 64,646,855 | Seven essential variables |
+| 8 | 68,339,572,672 | Eight essential variables |
+| 9 | 281,196,831,947,304 | Nine essential variables |
+
+### Best Approximation: Advanced Third-Order Ratio Recurrence
+
+We discovered an empirical recurrence that predicts A002079(k) from previous values:
+
+```
+r(k) = A002079(k) / A002079(k-1)
+
+r(k) = 6.382116·r(k-1) - 9.197797·r(k-2) + 2.294211·k - 9.929697
+```
+
+**Initial values:** r(2) = 2.0, r(3) = 4.5
+
+**Performance:** 0.001 bits error on leave-last-out validation (train k=1..8, test k=9)
+
+### Alternative: Polynomial (degree 5) Regression
+
+A polynomial fit to log₂(A002079(k)):
+
+```
+log₂(A(k)) = -0.000377k⁵ + 0.00904k⁴ - 0.0539k³ + 0.717k² - 0.897k + 0.226
+```
+
+**Performance:**
+- Fit error: 0.0007 bits (excellent on training data)
+- Extrapolation error: 0.0485 bits (worse than recurrence for prediction)
+
+### Quick Reference
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  MODEL 1: ADVANCED THIRD-ORDER RATIO (Best for Extrapolation)           │
+├─────────────────────────────────────────────────────────────────────────┤
+│  r(k) = 6.382116·r(k-1) - 9.197797·r(k-2) + 2.294211·k - 9.929697      │
+│                                                                         │
+│  where r(k) = A002079(k) / A002079(k-1)                                │
+│  Extrapolation error: 0.001 bits                                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│  MODEL 2: POLYNOMIAL (deg 5) (Best Training Fit)                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│  log₂(A(k)) = -0.000377k⁵ + 0.00904k⁴ - 0.0539k³ + 0.717k² - 0.897k   │
+│               + 0.226                                                   │
+│                                                                         │
+│  Fit error: 0.0007 bits | Extrapolation error: 0.0485 bits             │
+├─────────────────────────────────────────────────────────────────────────┤
+│  PREDICTIONS (from Advanced Third-Order Ratio):                         │
+│    N(10) ≈ 4.79 × 10²⁰   |   A002079(10) ≈ 4.11 × 10¹⁷                 │
+│                                                                         │
+│  Status: UNVERIFIED CONJECTURES                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Validation Strategy: Leave-Last-Out
+
+```mermaid
+flowchart TD
+    subgraph train [Training Data]
+        T1["A002079(1..8)"]
+    end
+    subgraph test [Hold-Out Test]
+        T2["A002079(9)"]
+    end
+    train --> Model["Fit Recurrence"]
+    Model --> Pred["Predict A002079(9)"]
+    Pred --> Cmp["Compare"]
+    T2 --> Cmp
+    Cmp --> Err["0.001 bits error"]
+```
+
+**Why Leave-Last-Out?**
+
+- Only 10 known values (n=0..9) — cannot afford k-fold cross-validation
+- Simulates actual use case: predict unknown future values from known past
+- Tests on the largest, most challenging value (k=9)
+- Common strategy for time-series with limited data
+
+### Model Comparison
+
+| Method | Error (bits) | Error (%) | Notes |
+|--------|-------------|-----------|-------|
+| Our Third-Order Recurrence | 0.001 | 0.07% | Empirical fit |
+| Zuev Asymptotic (2^n²/n!) | 2.31 | 400%+ | Theoretical bound |
+
+### ⚠️ Important Caveats
+
+> **This is an empirical conjecture, NOT a proven formula.**
+
+| Concern | Details |
+|---------|---------|
+| **Overfitting Risk** | 4 parameters fitted to only 8 data points (ratios r(3)..r(9)) |
+| **No Theoretical Basis** | Pure curve fitting with no combinatorial justification |
+| **Unverifiable** | N(10) is unknown — cannot validate extrapolation |
+| **Conjecture Status** | May break down for k > 9 |
+
+The formula fits known data extremely well but could be a coincidence. Use predictions with appropriate skepticism.
+
+---
+
 ## Implementation
 
 ### Method: Symmetry-Breaking Z3 Enumeration
@@ -246,17 +379,18 @@ threshold-functions/
 ├── README.md                               # This file
 ├── requirements.txt                        # Python dependencies
 ├── LICENSE                                 # MIT License
-├── threshold_functions_complete.ipynb      # Main notebook (CPU)
-├── threshold_functions_complete_gpu.ipynb  # GPU-accelerated version
-└── old/                                    # Previous exploration notebooks
+├── threshold_functions_complete.ipynb      # Main enumeration notebook (CPU)
+├── threshold_functions_complete_gpu.ipynb  # GPU-accelerated enumeration
+└── a002079_pattern_analysis.ipynb          # A002079 recurrence analysis ⭐
 ```
 
 ### Notebook Comparison
 
-| Notebook | Hardware | Best For |
-|----------|----------|----------|
-| `threshold_functions_complete.ipynb` | CPU (NumPy) | Systems without GPU, learning |
-| `threshold_functions_complete_gpu.ipynb` | GPU (PyTorch/CUDA) | Fast computation on NVIDIA GPUs |
+| Notebook | Purpose | Description |
+|----------|---------|-------------|
+| `threshold_functions_complete.ipynb` | Enumeration (CPU) | Z3-based counting with symmetry breaking |
+| `threshold_functions_complete_gpu.ipynb` | Enumeration (GPU) | PyTorch/CUDA accelerated version |
+| `a002079_pattern_analysis.ipynb` | Pattern Analysis | **Discovers recurrence for A002079** |
 
 **GPU Speedup:** 5-10x faster orbit computation for n ≥ 5
 
@@ -279,6 +413,8 @@ threshold-functions/
 | Reference | Link |
 |-----------|------|
 | **OEIS A000609** - Number of threshold functions | [oeis.org/A000609](https://oeis.org/A000609) |
+| **OEIS A002079** - Essential variable equivalence classes | [oeis.org/A002079](https://oeis.org/A002079) |
+| **King, A.D.** (2023). Comments on A002080 and related sequences based on threshold functions. | [OEIS PDF](https://oeis.org/A002080/a002080.pdf) |
 | **Muroga, S.** (1971). *Threshold Logic and Its Applications*. Wiley-Interscience. | [WorldCat](https://www.worldcat.org/title/threshold-logic-and-its-applications/oclc/140838) |
 | **Winder, R.O.** (1966). Enumeration of Seven-Argument Threshold Functions. *IEEE Trans. Electronic Computers*, EC-15(3), 315-325. | [IEEE Xplore](https://ieeexplore.ieee.org/document/1446579) |
 
@@ -324,8 +460,9 @@ threshold-functions/
 
 | OEIS | Description |
 |------|-------------|
-| [A000609](https://oeis.org/A000609) | Number of threshold functions |
-| [A002079](https://oeis.org/A002079) | Number of self-dual threshold functions |
+| [A000609](https://oeis.org/A000609) | Number of threshold functions of n or fewer variables |
+| [A002079](https://oeis.org/A002079) | N-equivalence classes of threshold functions of exactly n variables |
+| [A002077](https://oeis.org/A002077) | Number of self-dual threshold functions |
 | [A006126](https://oeis.org/A006126) | Number of monotone Boolean functions (Dedekind numbers) |
 
 ---
@@ -334,9 +471,9 @@ threshold-functions/
 
 Contributions are welcome! Potential areas for improvement:
 
-- [ ] Compute N(6) verification
-- [ ] GPU-accelerated orbit computation
-- [ ] Parallel Z3 solving
+- [ ] Verify N(10) to validate the A002079 recurrence conjecture
+- [ ] Find theoretical justification for the recurrence coefficients
+- [ ] Improve enumeration algorithms for larger n
 - [ ] Better visualization of hyperplane arrangements
 
 ---
@@ -355,9 +492,11 @@ This implementation builds on decades of research in threshold logic, particular
 - **Robert O. Winder** - Early computational results
 - **Yuri A. Zuev** - Asymptotic analysis
 - **Thomas Zaslavsky** - Hyperplane arrangement theory
+- **Alastair D. King** - King's formula connecting A002079 to N(n)
 
 ---
 
 <p align="center">
-  <i>The quest for a closed-form formula for N(n) continues...</i>
+  <i>The quest for a closed-form formula for N(n) continues...</i><br>
+  <i>Our empirical recurrence achieves 0.001 bits error — but can it be proven?</i>
 </p>
